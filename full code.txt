@@ -1,0 +1,156 @@
+full Code:
+1. app.py
+from flask import Flask, render_template, request
+import pandas as pd
+import textdistance
+import re
+from collections import Counter
+import os
+
+app = Flask(__name__)
+
+# Get the current directory
+current_directory = os.path.dirname(os.path.abspath(__file__))
+
+# Specify the file path relative to the current directory
+file_path = os.path.join(current_directory, 'autocorrect_book.txt')
+
+# Open the file with the correct file path
+try:
+    with open(file_path, 'r', encoding='utf-8') as f:
+        # Read from the file
+        data = f.read().lower()
+        words = re.findall(r'\w+', data)
+        words += words
+except FileNotFoundError:
+    print(f"File '{file_path}' not found.")
+    words = []
+
+V = set(words)
+words_freq_dict = Counter(words)
+Total = sum(words_freq_dict.values())
+probs = {}
+
+for k in words_freq_dict.keys():
+    probs[k] = words_freq_dict[k] / Total
+
+@app.route('/')
+def index():
+    return render_template('index.html', suggestions=None)
+
+@app.route('/suggest', methods=['POST'])
+def suggest():
+    keyword = request.form['keyword'].lower()
+    if keyword:
+        similarities = [1 - textdistance.Jaccard(qval=2).distance(v, keyword) for v in words_freq_dict.keys()]
+        df = pd.DataFrame.from_dict(probs, orient='index').reset_index()
+        df.columns = ['Word', 'Prob']
+        df['Similarity'] = similarities
+        suggestions = df.sort_values(['Similarity', 'Prob'], ascending=False)[['Word', 'Similarity']]
+        suggestions_list = suggestions.to_dict('records')  # Convert DataFrame to list of dictionaries
+        return render_template('index.html', suggestions=suggestions_list)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+
+
+2. index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Autocorrect System</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body style="background:#a1e5a1;">
+    <div class="container mt-5">
+        <h1>AutoSuggest and Autocorrect System</h1>
+        <form method="POST" action="/suggest" class="mt-4">
+            <div class="form-group">
+                <label for="keyword">Enter a word:</label>
+                <input type="text" class="form-control" id="keyword" name="keyword" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+
+        <div id="suggestions" class="mt-4">
+        {% if suggestions %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Suggested Word</th>
+                    <th>Similarity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for suggestion in suggestions %}
+                <tr>
+                    <td>{{ suggestion['Word'] }}</td>
+                    <td>{{ suggestion['Similarity'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        </div>
+
+
+    </div>
+</body>
+</html>
+
+
+3. Auto_correct.ipynb
+# import Libaries
+
+import numpy as pd
+import pandas as pd
+import textdistance 
+from collections import Counter
+import re
+
+words = []
+with open("autocorrect_book.txt",'r',encoding='utf-8') as f:
+    data = f.read()
+    data = data.lower()
+    word = re.findall('\\w+',data)
+    words += word
+
+print(words[0:10])
+
+# Make Vocabulary
+len(words)
+
+V = len(set(words))
+
+# Build the frequency of those words
+word_frequency_dict = Counter(words)
+
+word_frequency_dict.most_common(10)
+
+# probability(words) = frequency(words) / total word count
+Total_number_of_count = sum(word_frequency_dict.values())
+
+probs={}
+for k in word_frequency_dict.keys():
+    # print(word_frequency_dict[k])
+    probs[k] = word_frequency_dict[k]/Total_number_of_count
+
+probs
+
+# Finding similar words
+def autocorrect(word): # Hel is
+    word = word.lower() 
+    if word in probs:
+        print('the word is already there', word)
+    else:
+        similarities = [1-(textdistance.Jaccard(qval=2)).distance(w,word) for w in word_frequency_dict.keys()]
+        df = pd.DataFrame.from_dict(probs,orient='index').reset_index()
+        df = df.rename(columns={'index':'Word',0:'Prob'})
+        df['Similarity'] = similarities
+        output = df.sort_values(['Similarity','Prob'],ascending=False).head(10)
+        return(output)
+autocorrect('th')
+
+
